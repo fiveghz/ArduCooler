@@ -7,6 +7,7 @@
 // | Thanks to:
 // |  - http://www.instructables.com/id/Use-Arduino-with-TIP120-transistor-to-control-moto/
 // |  - https://blog.adafruit.com/2012/11/30/tutorial-arduino-lesson-3-rgb-leds-arduino/
+// |  - http://playground.arduino.cc/Code/Timer
 // +--------------------------------------------+
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -25,6 +26,8 @@ int redPin = 11;
 int greenPin = 10;
 int bluePin = 9;
 
+int relayPin = 1;
+
 // Temperature (F) level definition for RGB LED
 int cool = 72;
 int warm = 82;
@@ -41,32 +44,46 @@ void setup() {
   
   // SET TIP-120 PIN MODE
   pinMode(TIP120pin, OUTPUT);
+  
+  pinMode(relayPin, INPUT);
 
   // Start up the Dallas Temperature IC Control library
   sensors.begin(); // IC Default 9 bit. If you have troubles consider upping it 12. Ups the delay giving the IC more time to process the temperature measurement
+
 }
 
 void loop() {
-  sensors.requestTemperatures(); // Send the command to get temperatures
-  tempF = sensors.getTempFByIndex(0); // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
   
-  // Set color of RGB LED based on reading from temperature sensor
-  // While also setting the speed of the fan
-  if (tempF <= cool)
+  // If relay is triggered from Stero's USB port, turn on...
+  if (analogRead(relayPin))
   {
-     setLEDgreen();
-     setFanLow();
-  } else if (tempF <= warm) {
-     setLEDyellow();
-     setFanLow();
-  } else if (tempF <= hot) {
-     setLEDorange();
-     setFanMedium();
-  } else if (tempF > hot) {
-     setLEDred();
-     setFanHigh();
-  } 
-
+    
+    sensors.requestTemperatures(); // Send the command to get temperatures
+    tempF = sensors.getTempFByIndex(0); // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+    
+    // Set color of RGB LED based on reading from temperature sensor
+    // While also setting the speed of the fan
+    if (tempF <= cool)
+    {
+       setLEDgreen();
+       setFanLow();
+    } else if (tempF <= warm) {
+       setLEDyellow();
+       setFanLow();
+    } else if (tempF <= hot) {
+       setLEDorange();
+       setFanMedium();
+    } else if (tempF > hot) {
+       setLEDred();
+       setFanHigh();
+    } 
+  } else if (!analogRead(relayPin)) {
+    // Run cool down procedure
+    executeCoolDown();
+  } else {
+    // go into power save mode 
+    executeStandBy();
+  }
 }
 
 // ----------------------------------------------
@@ -82,6 +99,10 @@ void setColor(int red, int green, int blue)
 // ----------------------------------------------
 // |        INDIVIDUAL COLOR FUNCTIONS          |
 // ----------------------------------------------
+void setLEDoff()
+{
+  setColor(0, 0, 0);
+}
 void setLEDblue()
 {
   setColor(0, 0, 255);
@@ -110,6 +131,10 @@ void setLEDwhite()
 // ----------------------------------------------
 // |           FAN SPEED FUNCTIONS              |
 // ----------------------------------------------
+void setFanOff()
+{
+  analogWrite(TIP120pin, 0);
+}
 void setFanLow()
 {
   analogWrite(TIP120pin, 64);
@@ -121,4 +146,21 @@ void setFanMedium()
 void setFanHigh()
 {
   analogWrite(TIP120pin, 255);
+}
+
+void executeCoolDown()
+{
+  setLEDblue();
+  // Spin fan at low for 5 minutes
+  for (int i = 0; i < 300; i++)
+  {
+    setFanLow();
+    delay(1000); 
+  }
+}
+
+void executeStandBy()
+{
+  setLEDoff();
+  setFanOff();
 }
